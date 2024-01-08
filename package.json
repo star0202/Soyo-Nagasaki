@@ -1,0 +1,39 @@
+{
+  "name": "cts-template",
+  "version": "0.1.0",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "rimraf dist && tsc",
+    "dev": "ts-node --swc src",
+    "start": "pnpm build && pm2 start",
+    "lint": "eslint src --ignore-path .gitignore"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "devDependencies": {
+    "@swc/core": "^1.3.83",
+    "@trivago/prettier-plugin-sort-imports": "^4.2.0",
+    "@types/git-rev-sync": "^2.0.1",
+    "@types/node": "^20.5.9",
+    "@typescript-eslint/eslint-plugin": "^6.6.0",
+    "@typescript-eslint/parser": "^6.6.0",
+    "eslint": "^8.48.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "prettier": "^2.8.8",
+    "rimraf": "^5.0.1",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@pikokr/command.ts": "5.6.2-dev.4",
+    "chalk": "^4.1.2",
+    "discord.js": "^14.13.0",
+    "git-rev-sync": "^3.0.2",
+    "jejudo": "^0.1.5",
+    "tslog": "^4.9.2",
+    "zod": "^3.22.2"
+  },
+  "packageManager": "pnpm@8.10.0"
+}
