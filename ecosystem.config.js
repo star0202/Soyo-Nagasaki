@@ -2,7 +2,7 @@
 module.exports = {
   apps: [
     {
-      name: 'Bot',
+      name: 'Soyo-Nagasaki',
       script: './dist/index.js',
     },
   ],

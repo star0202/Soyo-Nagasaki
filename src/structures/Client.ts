@@ -1,5 +1,6 @@
 import { config } from '../config'
 import { VERSION } from '../constants'
+import Database from './Database'
 import { CommandClient } from '@pikokr/command.ts'
 import { green } from 'chalk'
 import { ActivityType, Client } from 'discord.js'
@@ -11,6 +12,8 @@ import { Logger } from 'tslog'
 
 export default class CustomClient extends CommandClient {
   private jejudo!: Jejudo
+
+  readonly db: Database
 
   constructor(config: {
     logger: Logger<unknown>
@@ -30,6 +33,8 @@ export default class CustomClient extends CommandClient {
     this.discord.on('debug', (msg) => {
       this.logger.debug(msg)
     })
+
+    this.db = new Database(this.logger)
   }
 
   async setup() {
