@@ -94,6 +94,14 @@ class Raid extends CustomExt {
     if (!i.guild)
       return i.editReply('이 명령어는 서버에서만 사용할 수 있습니다.')
 
+    if (
+      !i.guild.members.cache
+        .get(i.user.id)
+        ?.permissionsIn(i.channelId)
+        .has('Administrator')
+    )
+      return i.editReply('이 명령어를 사용할 권한이 없습니다.')
+
     const res = await i.editReply({
       content:
         '1. 의심스러운 계정들을 위한 역할을 생성해주세요. **(해당 역할은 봇의 최상위 역할보다 아래에 있어야 합니다)**\n' +
@@ -201,6 +209,14 @@ class Raid extends CustomExt {
 
     if (!i.guild)
       return i.editReply('이 명령어는 서버에서만 사용할 수 있습니다.')
+
+    if (
+      !i.guild.members.cache
+        .get(i.user.id)
+        ?.permissionsIn(i.channelId)
+        .has('Administrator')
+    )
+      return i.editReply('이 명령어를 사용할 권한이 없습니다.')
 
     const data = await this.db.server.findUnique({
       where: {
