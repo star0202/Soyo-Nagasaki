@@ -46,7 +46,6 @@ class Raid extends CustomExt {
           .setTitle('Raid Shield Activated')
           .setDetailedAuthor(member)
           .setUNIXTimestamp()
-          .setColor(0xff0000)
           .addFields(
             {
               name: 'User',

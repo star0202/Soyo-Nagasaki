@@ -34,6 +34,12 @@ const chunk = (content: string, limit = 1024 - 10) => {
 }
 
 export default class CustomEmbed extends EmbedBuilder {
+  constructor() {
+    super()
+
+    this.setColor('#ff0000')
+  }
+
   setUNIXTimestamp(timestamp = Date.now()) {
     this.setFooter({
       text: toTimestamp(timestamp),
