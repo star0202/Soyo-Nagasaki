@@ -8,9 +8,9 @@ import {
   ApplicationCommandOptionType,
   ApplicationCommandType,
   ChannelSelectMenuBuilder,
+  ChannelType,
   ChatInputCommandInteraction,
   ComponentType,
-  RoleSelectMenuBuilder,
 } from 'discord.js'
 import type { GuildMember, TextBasedChannel } from 'discord.js'
 
@@ -95,105 +95,85 @@ class Raid extends CustomExt {
       return i.editReply('이 명령어는 서버에서만 사용할 수 있습니다.')
 
     if (
-      !i.guild.members.cache
-        .get(i.user.id)
+      !(await i.guild.members.fetch(i.user.id))
         ?.permissionsIn(i.channelId)
         .has('Administrator')
     )
       return i.editReply('이 명령어를 사용할 권한이 없습니다.')
 
+    const role = await i.guild.roles.create({
+      name: 'muted',
+      color: '#546e7a',
+      position: 1,
+    })
+
+    const channels = i.guild.channels.cache
+
+    if (channels.size === 0) return i.editReply('이 서버에는 채널이 없습니다.')
+
+    Promise.all(
+      channels.map((c) =>
+        c.type === ChannelType.GuildText ||
+        c.type === ChannelType.GuildCategory ||
+        c.type === ChannelType.GuildVoice ||
+        c.type === ChannelType.GuildStageVoice
+          ? c.permissionOverwrites.create(role, {
+              SendMessages: false,
+              SendMessagesInThreads: false,
+              CreatePrivateThreads: false,
+              CreatePublicThreads: false,
+              AddReactions: false,
+              Connect: false,
+            })
+          : {}
+      )
+    )
+
     const res = await i.editReply({
-      content:
-        '1. 의심스러운 계정들을 위한 역할을 생성해주세요. **(해당 역할은 봇의 최상위 역할보다 아래에 있어야 합니다)**\n' +
-        '2. 생성을 완료했다면 확인 버튼을 눌러주세요.',
-      components: [new Confirm()],
+      content: '로그 채널을 선택해주세요.',
+      components: [
+        new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
+          new ChannelSelectMenuBuilder()
+            .setCustomId('channel')
+            .setPlaceholder('채널 선택')
+        ),
+      ],
     })
 
     res
       .createMessageComponentCollector({
         filter: (j) => j.user.id === i.user.id,
-        componentType: ComponentType.Button,
+        componentType: ComponentType.ChannelSelect,
       })
       .on('collect', async (j) => {
-        if (j.customId === 'confirm') {
-          await j.deferUpdate()
+        await j.deferUpdate()
 
-          const res = await i.editReply({
-            content: '생성한 역할을 선택해주세요.',
-            components: [
-              new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
-                new RoleSelectMenuBuilder()
-                  .setCustomId('role')
-                  .setPlaceholder('역할 선택')
-              ),
-            ],
-          })
+        const channel = j.values[0]
 
-          res
-            .createMessageComponentCollector({
-              filter: (j) => j.user.id === i.user.id,
-              componentType: ComponentType.RoleSelect,
-            })
-            .on('collect', async (j) => {
-              await j.deferUpdate()
+        await i.editReply({
+          content:
+            '설정이 완료되었습니다.\n' +
+            `역할: <@&${role.id}>\n` +
+            `로그 채널: <#${channel}>`,
+          components: [],
+        })
 
-              const role = j.values[0]
-
-              const res = await i.editReply({
-                content: '로그 채널을 선택해주세요.',
-                components: [
-                  new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
-                    new ChannelSelectMenuBuilder()
-                      .setCustomId('channel')
-                      .setPlaceholder('채널 선택')
-                  ),
-                ],
-              })
-
-              res
-                .createMessageComponentCollector({
-                  filter: (j) => j.user.id === i.user.id,
-                  componentType: ComponentType.ChannelSelect,
-                })
-                .on('collect', async (j) => {
-                  await j.deferUpdate()
-
-                  const channel = j.values[0]
-
-                  await i.editReply({
-                    content:
-                      '설정이 완료되었습니다.\n' +
-                      `역할: <@&${role}>\n` +
-                      `로그 채널: <#${channel}>`,
-                    components: [],
-                  })
-
-                  await this.db.server.upsert({
-                    where: {
-                      id: i.guildId!,
-                    },
-                    update: {
-                      months,
-                      role,
-                      logChannel: channel,
-                    },
-                    create: {
-                      id: i.guildId!,
-                      months,
-                      role,
-                      logChannel: channel,
-                    },
-                  })
-                })
-            })
-        } else {
-          await j.deferUpdate()
-
-          await i.editReply({
-            content: '설정이 취소되었습니다.',
-            components: [],
-          })
-        }
+        await this.db.server.upsert({
+          where: {
+            id: i.guildId!,
+          },
+          update: {
+            months,
+            role: role.id,
+            logChannel: channel,
+          },
+          create: {
+            id: i.guildId!,
+            months,
+            role: role.id,
+            logChannel: channel,
+          },
+        })
       })
   }
 
@@ -242,6 +222,8 @@ class Raid extends CustomExt {
       .on('collect', async (j) => {
         if (j.customId === 'confirm') {
           await j.deferUpdate()
+
+          await i.guild!.roles.cache.get(data.role)!.delete()
 
           await i.editReply({
             content: '설정이 해제되었습니다.',
