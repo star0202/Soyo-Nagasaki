@@ -266,7 +266,6 @@ class Raid extends CustomExt {
       return i.editReply('This server is not using the raid shield system.')
 
     i.editReply({
-      content: '설정 정보',
       embeds: [
         new CustomEmbed().setTitle('Raid Shield System').addFields(
           {
