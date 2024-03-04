@@ -43,27 +43,27 @@ class Raid extends CustomExt {
     await channel.send({
       embeds: [
         new CustomEmbed()
-          .setTitle('의심스러운 계정 감지')
+          .setTitle('Raid Shield Activated')
           .setDetailedAuthor(member)
           .setUNIXTimestamp()
           .setColor(0xff0000)
           .addFields(
             {
-              name: '유저',
+              name: 'User',
               value: `<@${member.id}>`,
               inline: true,
             },
             {
-              name: '설정된 가입 개월 수',
-              value: `${data.months}개월`,
+              name: 'Configured Months',
+              value: `${data.months} months`,
               inline: true,
             },
             {
-              name: '가입일',
+              name: 'User Created At',
               value: `<t:${toTimestamp(member.user.createdAt)}:F>`,
             },
             {
-              name: '서버 타임',
+              name: 'Server Time',
               value: `<t:${toTimestamp(now)}:F>`,
             }
           ),
@@ -73,14 +73,14 @@ class Raid extends CustomExt {
 
   @applicationCommand({
     type: ApplicationCommandType.ChatInput,
-    name: '설정',
-    description: '레이드 방어 시스템을 설정합니다.',
+    name: 'setup',
+    description: 'Set up the raid shield system.',
   })
   async setup(
     i: ChatInputCommandInteraction,
     @option({
       name: 'months',
-      description: '의심스러운 계정으로 판단할 가입 개월 수입니다.',
+      description: 'The number of months to set up the raid shield system.',
       type: ApplicationCommandOptionType.Integer,
       minValue: 1,
       required: true,
@@ -92,14 +92,14 @@ class Raid extends CustomExt {
     })
 
     if (!i.guild)
-      return i.editReply('이 명령어는 서버에서만 사용할 수 있습니다.')
+      return i.editReply('This command can only be used on servers.')
 
     if (
       !(await i.guild.members.fetch(i.user.id))
         ?.permissionsIn(i.channelId)
         .has('Administrator')
     )
-      return i.editReply('이 명령어를 사용할 권한이 없습니다.')
+      return i.editReply('You do not have permission to use this command.')
 
     const role = await i.guild.roles.create({
       name: 'muted',
@@ -109,7 +109,7 @@ class Raid extends CustomExt {
 
     const channels = i.guild.channels.cache
 
-    if (channels.size === 0) return i.editReply('이 서버에는 채널이 없습니다.')
+    if (channels.size === 0) return i.editReply('No channels found.')
 
     Promise.all(
       channels.map((c) =>
@@ -130,12 +130,12 @@ class Raid extends CustomExt {
     )
 
     const res = await i.editReply({
-      content: '로그 채널을 선택해주세요.',
+      content: 'Please select the log channel.',
       components: [
         new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
           new ChannelSelectMenuBuilder()
             .setCustomId('channel')
-            .setPlaceholder('채널 선택')
+            .setPlaceholder('Select a channel')
         ),
       ],
     })
@@ -152,9 +152,9 @@ class Raid extends CustomExt {
 
         await i.editReply({
           content:
-            '설정이 완료되었습니다.\n' +
-            `역할: <@&${role.id}>\n` +
-            `로그 채널: <#${channel}>`,
+            'The raid shield system has been set up.\n' +
+            `Role: <@&${role.id}>\n` +
+            `Log channel: <#${channel}>`,
           components: [],
         })
 
@@ -179,8 +179,8 @@ class Raid extends CustomExt {
 
   @applicationCommand({
     type: ApplicationCommandType.ChatInput,
-    name: '해제',
-    description: '레이드 방어 시스템을 해제합니다.',
+    name: 'disable',
+    description: 'Disable the raid shield system.',
   })
   async disable(i: ChatInputCommandInteraction) {
     await i.deferReply({
@@ -188,7 +188,7 @@ class Raid extends CustomExt {
     })
 
     if (!i.guild)
-      return i.editReply('이 명령어는 서버에서만 사용할 수 있습니다.')
+      return i.editReply('This command can only be used on servers.')
 
     if (
       !i.guild.members.cache
@@ -196,7 +196,7 @@ class Raid extends CustomExt {
         ?.permissionsIn(i.channelId)
         .has('Administrator')
     )
-      return i.editReply('이 명령어를 사용할 권한이 없습니다.')
+      return i.editReply('You do not have permission to use this command.')
 
     const data = await this.db.server.findUnique({
       where: {
@@ -205,12 +205,10 @@ class Raid extends CustomExt {
     })
 
     if (!data)
-      return i.editReply(
-        '이 서버는 레이드 방어 시스템을 사용하지 않고 있습니다.'
-      )
+      return i.editReply('This server is not using the raid shield system.')
 
     const res = await i.editReply({
-      content: '설정을 해제하시겠습니까?',
+      content: 'Are you sure you want to disable the raid shield system?',
       components: [new Confirm()],
     })
 
@@ -226,7 +224,7 @@ class Raid extends CustomExt {
           await i.guild!.roles.cache.get(data.role)!.delete()
 
           await i.editReply({
-            content: '설정이 해제되었습니다.',
+            content: 'The raid shield system has been disabled.',
             components: [],
           })
 
@@ -239,11 +237,56 @@ class Raid extends CustomExt {
           await j.deferUpdate()
 
           await i.editReply({
-            content: '설정 해제가 취소되었습니다.',
+            content: 'The raid shield system has not been disabled.',
             components: [],
           })
         }
       })
+  }
+
+  @applicationCommand({
+    type: ApplicationCommandType.ChatInput,
+    name: 'info',
+    description: 'Get the raid shield system settings.',
+  })
+  async info(i: ChatInputCommandInteraction) {
+    await i.deferReply({
+      ephemeral: true,
+    })
+
+    if (!i.guild)
+      return i.editReply('This command can only be used on servers.')
+
+    const data = await this.db.server.findUnique({
+      where: {
+        id: i.guildId!,
+      },
+    })
+
+    if (!data)
+      return i.editReply('This server is not using the raid shield system.')
+
+    i.editReply({
+      content: '설정 정보',
+      embeds: [
+        new CustomEmbed().setTitle('Raid Shield System').addFields(
+          {
+            name: 'Configured Months',
+            value: `${data.months} months`,
+            inline: true,
+          },
+          {
+            name: 'Role',
+            value: `<@&${data.role}>`,
+            inline: true,
+          },
+          {
+            name: 'Log Channel',
+            value: `<#${data.logChannel}>`,
+          }
+        ),
+      ],
+    })
   }
 }
 
