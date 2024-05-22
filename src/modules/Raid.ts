@@ -104,6 +104,7 @@ class Raid extends CustomExt {
       name: 'muted',
       color: '#546e7a',
       position: 1,
+      permissions: [],
     })
 
     const channels = i.guild.channels.cache
