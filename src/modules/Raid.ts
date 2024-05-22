@@ -12,9 +12,35 @@ import {
   ChatInputCommandInteraction,
   ComponentType,
 } from 'discord.js'
-import type { GuildMember, TextBasedChannel } from 'discord.js'
+import type {
+  GuildMember,
+  NonThreadGuildBasedChannel,
+  TextBasedChannel,
+} from 'discord.js'
 
 class Raid extends CustomExt {
+  @listener({
+    event: 'channelCreate',
+  })
+  async applyMutedPermission(channel: NonThreadGuildBasedChannel) {
+    const data = await this.db.server.findUnique({
+      where: {
+        id: channel.guild.id,
+      },
+    })
+
+    if (!data) return
+
+    await channel.permissionOverwrites.create(data.role, {
+      SendMessages: false,
+      SendMessagesInThreads: false,
+      CreatePrivateThreads: false,
+      CreatePublicThreads: false,
+      AddReactions: false,
+      Connect: false,
+    })
+  }
+
   @listener({
     event: 'guildMemberAdd',
   })
