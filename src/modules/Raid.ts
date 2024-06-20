@@ -1,8 +1,14 @@
+import { administratorOnly } from '../checks/administrator'
+import Confirm from '../components/Confirm'
+import RaidEmbed from '../embeds/Raid'
+import type CustomClient from '../structures/Client'
 import CustomEmbed from '../structures/Embed'
-import CustomExt from '../structures/Extension'
-import Confirm from '../structures/components/Confirm'
-import { toTimestamp } from '../utils/time'
-import { applicationCommand, listener, option } from '@pikokr/command.ts'
+import {
+  Extension,
+  applicationCommand,
+  listener,
+  option,
+} from '@pikokr/command.ts'
 import {
   ActionRowBuilder,
   ApplicationCommandOptionType,
@@ -18,12 +24,12 @@ import type {
   TextBasedChannel,
 } from 'discord.js'
 
-class Raid extends CustomExt {
+class Raid extends Extension<CustomClient> {
   @listener({
     event: 'channelCreate',
   })
   async applyMutedPermission(channel: NonThreadGuildBasedChannel) {
-    const data = await this.db.server.findUnique({
+    const data = await this.commandClient.db.server.findUnique({
       where: {
         id: channel.guild.id,
       },
@@ -45,7 +51,7 @@ class Raid extends CustomExt {
     event: 'guildMemberAdd',
   })
   async shield(member: GuildMember) {
-    const data = await this.db.server.findUnique({
+    const data = await this.commandClient.db.server.findUnique({
       where: {
         id: member.guild.id,
       },
@@ -67,35 +73,11 @@ class Raid extends CustomExt {
     if (!channel) return
 
     await channel.send({
-      embeds: [
-        new CustomEmbed()
-          .setTitle('Raid Shield Activated')
-          .setDetailedAuthor(member)
-          .setUNIXTimestamp()
-          .addFields(
-            {
-              name: 'User',
-              value: `<@${member.id}>`,
-              inline: true,
-            },
-            {
-              name: 'Configured Months',
-              value: `${data.months} months`,
-              inline: true,
-            },
-            {
-              name: 'User Created At',
-              value: `<t:${toTimestamp(member.user.createdAt)}:F>`,
-            },
-            {
-              name: 'Server Time',
-              value: `<t:${toTimestamp(now)}:F>`,
-            }
-          ),
-      ],
+      embeds: [RaidEmbed.activated(member, data.months, now)],
     })
   }
 
+  @administratorOnly
   @applicationCommand({
     type: ApplicationCommandType.ChatInput,
     name: 'setup',
@@ -116,26 +98,17 @@ class Raid extends CustomExt {
       ephemeral: true,
     })
 
-    if (!i.guild)
-      return i.editReply('This command can only be used on servers.')
-
-    if (
-      !(await i.guild.members.fetch(i.user.id))
-        ?.permissionsIn(i.channelId)
-        .has('Administrator')
-    )
-      return i.editReply('You do not have permission to use this command.')
-
-    const role = await i.guild.roles.create({
+    const role = await i.guild!.roles.create({
       name: 'muted',
       color: '#546e7a',
       position: 1,
       permissions: [],
     })
 
-    const channels = i.guild.channels.cache
+    const channels = i.guild!.channels.cache
 
-    if (channels.size === 0) return i.editReply('No channels found.')
+    if (channels.size === 0)
+      return i.editReply({ embeds: [RaidEmbed.noChannels()] })
 
     Promise.all(
       channels.map((c) =>
@@ -184,7 +157,7 @@ class Raid extends CustomExt {
           components: [],
         })
 
-        await this.db.server.upsert({
+        await this.commandClient.db.server.upsert({
           where: {
             id: i.guildId!,
           },
@@ -203,6 +176,7 @@ class Raid extends CustomExt {
       })
   }
 
+  @administratorOnly
   @applicationCommand({
     type: ApplicationCommandType.ChatInput,
     name: 'disable',
@@ -213,61 +187,44 @@ class Raid extends CustomExt {
       ephemeral: true,
     })
 
-    if (!i.guild)
-      return i.editReply('This command can only be used on servers.')
-
-    if (
-      !i.guild.members.cache
-        .get(i.user.id)
-        ?.permissionsIn(i.channelId)
-        .has('Administrator')
-    )
-      return i.editReply('You do not have permission to use this command.')
-
-    const data = await this.db.server.findUnique({
+    const data = await this.commandClient.db.server.findUnique({
       where: {
         id: i.guildId!,
       },
     })
 
     if (!data)
-      return i.editReply('This server is not using the raid shield system.')
+      return i.editReply({
+        embeds: [RaidEmbed.notConfigured()],
+      })
 
-    const res = await i.editReply({
-      content: 'Are you sure you want to disable the raid shield system?',
-      components: [new Confirm()],
+    const confirm = new Confirm(i, {
+      message: 'Are you sure you want to disable the raid shield system?',
+      confirm: 'Yes',
+      deny: 'No',
+      defer: true,
+      confirmFn: async ({ i }) => {
+        await i.guild!.roles.cache.get(data.role)!.delete()
+
+        await this.commandClient.db.server.delete({
+          where: {
+            id: i.guildId!,
+          },
+        })
+
+        i.editReply({
+          content: 'The raid shield system has been disabled.',
+          components: [],
+        })
+      },
+      denyFn: async ({ i }) =>
+        i.editReply({
+          content: 'The raid shield system has not been disabled.',
+          components: [],
+        }),
     })
 
-    res
-      .createMessageComponentCollector({
-        filter: (j) => j.user.id === i.user.id,
-        componentType: ComponentType.Button,
-      })
-      .on('collect', async (j) => {
-        if (j.customId === 'confirm') {
-          await j.deferUpdate()
-
-          await i.guild!.roles.cache.get(data.role)!.delete()
-
-          await i.editReply({
-            content: 'The raid shield system has been disabled.',
-            components: [],
-          })
-
-          await this.db.server.delete({
-            where: {
-              id: i.guildId!,
-            },
-          })
-        } else {
-          await j.deferUpdate()
-
-          await i.editReply({
-            content: 'The raid shield system has not been disabled.',
-            components: [],
-          })
-        }
-      })
+    confirm.send()
   }
 
   @applicationCommand({
@@ -283,7 +240,7 @@ class Raid extends CustomExt {
     if (!i.guild)
       return i.editReply('This command can only be used on servers.')
 
-    const data = await this.db.server.findUnique({
+    const data = await this.commandClient.db.server.findUnique({
       where: {
         id: i.guildId!,
       },

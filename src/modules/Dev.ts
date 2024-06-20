@@ -1,17 +1,16 @@
-import CustomExt from '../structures/Extension'
+import { ownerOnly } from '../checks/owner'
+import { Emojis } from '../constants'
+import { Eval, Reload, Sync } from '../embeds/Dev'
+import type CustomClient from '../structures/Client'
+import KnownError from '../structures/Error'
 import { toString } from '../utils/object'
-import {
-  applicationCommand,
-  listener,
-  option,
-  ownerOnly,
-} from '@pikokr/command.ts'
+import { Extension, applicationCommand, listener } from '@pikokr/command.ts'
 import { blue, green, yellow } from 'chalk'
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js'
 import {
   ApplicationCommandOptionType,
   ApplicationCommandType,
   ChatInputCommandInteraction,
-  codeBlock,
 } from 'discord.js'
 import type {
   CommandInteractionOption,
@@ -19,22 +18,18 @@ import type {
   Interaction,
   Message,
 } from 'discord.js'
-import { basename, join } from 'path'
 
 const commandLog = (data: CommandInteractionOption, indents = 0) =>
   `\n${' '.repeat(indents * 2)}- ${green(data.name)}: ${blue(
     data.value
   )} (${yellow(ApplicationCommandOptionType[data.type])})`
 
-class Dev extends CustomExt {
+class Dev extends Extension<CustomClient> {
   @listener({ event: 'applicationCommandInvokeError', emitter: 'cts' })
   async errorLogger(err: Error) {
-    try {
-      this.logger.error(err)
-    } catch (e) {
-      console.error(err)
-      console.error(e)
-    }
+    if (err instanceof KnownError) return this.logger.warn(err.message)
+
+    this.logger.error(err.stack)
   }
 
   @listener({ event: 'interactionCreate' })
@@ -68,78 +63,15 @@ class Dev extends CustomExt {
     description: '[OWNER] Reload all modules',
   })
   async reload(i: ChatInputCommandInteraction) {
-    await i.deferReply()
-
-    const data = await this.commandClient.registry.reloadModules().then((r) =>
-      r.map((x) => ({
-        path: basename(x.file),
-        result: x.result,
-        error: x.error?.message.normalize(),
-      }))
-    )
-
-    let success = 0,
-      fail = 0
-    for (const x of data) {
-      if (x.result) success++
-      else fail++
-    }
-
-    await i.editReply(
-      codeBlock(
-        `✅ ${success} ❌ ${fail}\n` +
-          data.map((x) => `${x.result ? '✅' : '❌'} ${x.path}`).join('\n')
-      )
-    )
-  }
-
-  @ownerOnly
-  @applicationCommand({
-    type: ApplicationCommandType.ChatInput,
-    name: 'load',
-    description: '[OWNER] Load a module',
-  })
-  async load(
-    i: ChatInputCommandInteraction,
-    @option({
-      type: ApplicationCommandOptionType.String,
-      name: 'module',
-      description: 'Module name',
-      required: true,
+    await i.deferReply({
+      ephemeral: true,
     })
-    name: string
-  ) {
-    await i.deferReply()
 
-    await this.commandClient.registry.loadModulesAtPath(
-      join(__dirname, `${name}.ts`)
-    )
+    const modules = await this.commandClient.registry.reloadModules()
 
-    await i.editReply(codeBlock(`✅ ${name}.ts`))
-  }
-
-  @ownerOnly
-  @applicationCommand({
-    type: ApplicationCommandType.ChatInput,
-    name: 'unregister',
-    description: '[OWNER] Unregister commands',
-  })
-  async unregister(
-    i: ChatInputCommandInteraction,
-    @option({
-      type: ApplicationCommandOptionType.Boolean,
-      name: 'global',
-      description: 'Global?',
-      required: true,
+    i.editReply({
+      embeds: [Reload.result(modules)],
     })
-    global: boolean
-  ) {
-    await i.deferReply()
-
-    if (global) this.client.application?.commands.set([])
-    else i.guild?.commands.set([])
-
-    await i.editReply('Done')
   }
 
   @ownerOnly
@@ -149,11 +81,15 @@ class Dev extends CustomExt {
     description: '[OWNER] Sync commands',
   })
   async sync(i: ChatInputCommandInteraction) {
-    await i.deferReply()
+    await i.deferReply({
+      ephemeral: true,
+    })
 
     await this.commandClient.getApplicationCommandsExtension()?.sync()
 
-    await i.editReply('Done')
+    i.editReply({
+      embeds: [Sync.success()],
+    })
   }
 
   @listener({ event: 'messageCreate' })
@@ -169,16 +105,42 @@ class Dev extends CustomExt {
       .replace(/```(js|ts)?/g, '')
       .trim()
 
+    let res
     try {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const cts = this.commandClient
+      const { cts, client } = {
+        cts: this.commandClient,
+        client: this.client,
+      }
 
-      const res = await eval(code)
-      const lines = typeof res === 'string' ? res : toString(res)
-      await msg.reply(codeBlock('ts', lines))
+      res = await eval(code)
     } catch (e) {
-      await msg.reply(`Error\n${codeBlock('js', `${e}`)}`)
+      await msg.react(Emojis.Fail)
+
+      if (!(e instanceof Error)) throw e
+
+      msg.reply({
+        embeds: [Eval.error(code, e)],
+        allowedMentions: { repliedUser: false },
+      })
+
+      return
     }
+
+    await msg.react(Emojis.Success)
+    const output = typeof res === 'string' ? res : toString(res)
+    msg.reply({
+      embeds: [Eval.success(code, output)],
+      allowedMentions: { repliedUser: false },
+      components: [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setStyle(ButtonStyle.Link)
+            .setLabel('Jump to message')
+            .setURL(msg.url)
+        ),
+      ],
+    })
   }
 }
 

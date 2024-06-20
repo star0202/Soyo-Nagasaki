@@ -1,11 +1,18 @@
-import { inspect } from 'util'
+import { inspect } from 'node:util'
 
 export const toString = <T>(obj: T, ignore?: (keyof T)[]): string => {
-  const copied = structuredClone(obj)
+  let cur = obj
+  if (ignore) {
+    try {
+      cur = structuredClone(obj)
+    } catch (e) {
+      console.error(e)
+    }
 
-  if (ignore) ignore.forEach((key) => delete copied[key])
+    ignore.forEach((key) => delete cur[key])
+  }
 
-  return inspect(copied, {
+  return inspect(cur, {
     maxArrayLength: 200,
     depth: 2,
   })
