@@ -1,7 +1,8 @@
+import { administratorOnly } from '../checks/administrator'
 import Confirm from '../components/Confirm'
+import RaidEmbed from '../embeds/Raid'
 import type CustomClient from '../structures/Client'
 import CustomEmbed from '../structures/Embed'
-import { toTimestamp } from '../utils/time'
 import {
   Extension,
   applicationCommand,
@@ -72,35 +73,11 @@ class Raid extends Extension<CustomClient> {
     if (!channel) return
 
     await channel.send({
-      embeds: [
-        new CustomEmbed()
-          .setTitle('Raid Shield Activated')
-          .setDetailedAuthor(member)
-          .setUNIXTimestamp()
-          .addFields(
-            {
-              name: 'User',
-              value: `<@${member.id}>`,
-              inline: true,
-            },
-            {
-              name: 'Configured Months',
-              value: `${data.months} months`,
-              inline: true,
-            },
-            {
-              name: 'User Created At',
-              value: `<t:${toTimestamp(member.user.createdAt)}:F>`,
-            },
-            {
-              name: 'Server Time',
-              value: `<t:${toTimestamp(now)}:F>`,
-            }
-          ),
-      ],
+      embeds: [RaidEmbed.activated(member, data.months, now)],
     })
   }
 
+  @administratorOnly
   @applicationCommand({
     type: ApplicationCommandType.ChatInput,
     name: 'setup',
@@ -121,26 +98,17 @@ class Raid extends Extension<CustomClient> {
       ephemeral: true,
     })
 
-    if (!i.guild)
-      return i.editReply('This command can only be used on servers.')
-
-    if (
-      !(await i.guild.members.fetch(i.user.id))
-        ?.permissionsIn(i.channelId)
-        .has('Administrator')
-    )
-      return i.editReply('You do not have permission to use this command.')
-
-    const role = await i.guild.roles.create({
+    const role = await i.guild!.roles.create({
       name: 'muted',
       color: '#546e7a',
       position: 1,
       permissions: [],
     })
 
-    const channels = i.guild.channels.cache
+    const channels = i.guild!.channels.cache
 
-    if (channels.size === 0) return i.editReply('No channels found.')
+    if (channels.size === 0)
+      return i.editReply({ embeds: [RaidEmbed.noChannels()] })
 
     Promise.all(
       channels.map((c) =>
@@ -208,6 +176,7 @@ class Raid extends Extension<CustomClient> {
       })
   }
 
+  @administratorOnly
   @applicationCommand({
     type: ApplicationCommandType.ChatInput,
     name: 'disable',
@@ -218,17 +187,6 @@ class Raid extends Extension<CustomClient> {
       ephemeral: true,
     })
 
-    if (!i.guild)
-      return i.editReply('This command can only be used on servers.')
-
-    if (
-      !i.guild.members.cache
-        .get(i.user.id)
-        ?.permissionsIn(i.channelId)
-        .has('Administrator')
-    )
-      return i.editReply('You do not have permission to use this command.')
-
     const data = await this.commandClient.db.server.findUnique({
       where: {
         id: i.guildId!,
@@ -236,7 +194,9 @@ class Raid extends Extension<CustomClient> {
     })
 
     if (!data)
-      return i.editReply('This server is not using the raid shield system.')
+      return i.editReply({
+        embeds: [RaidEmbed.notConfigured()],
+      })
 
     const confirm = new Confirm(i, {
       message: 'Are you sure you want to disable the raid shield system?',

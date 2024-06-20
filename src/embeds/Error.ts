@@ -1,17 +1,28 @@
 import CustomEmbed from '../structures/Embed'
 
 export class Permission {
-  private static get permissionFailed() {
-    return new CustomEmbed().setTitle('권한 부족').setColor('Red')
+  private static get permissionDenied() {
+    return new CustomEmbed().setTitle('Permission denied').setColor('Red')
   }
 
   static notOwner = () =>
-    this.permissionFailed.setDescription(
-      '봇 소유자만 사용할 수 있는 명령어입니다.'
+    this.permissionDenied.setDescription(
+      'You must be the owner of the bot to use this command'
     )
 
-  static notAdmin = () =>
-    this.permissionFailed.setDescription(
-      '관리자만 사용할 수 있는 명령어입니다.'
+  static notAdministrator = () =>
+    this.permissionDenied.setDescription(
+      'You must be an administrator of the server to use this command'
+    )
+}
+
+export class IncorrectUsage {
+  private static get incorrectUsage() {
+    return new CustomEmbed().setTitle('Incorrect usage').setColor('Red')
+  }
+
+  static notInServer = () =>
+    this.incorrectUsage.setDescription(
+      'This command can only be used in a server'
     )
 }
