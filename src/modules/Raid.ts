@@ -1,8 +1,13 @@
+import Confirm from '../components/Confirm'
+import type CustomClient from '../structures/Client'
 import CustomEmbed from '../structures/Embed'
-import CustomExt from '../structures/Extension'
-import Confirm from '../structures/components/Confirm'
 import { toTimestamp } from '../utils/time'
-import { applicationCommand, listener, option } from '@pikokr/command.ts'
+import {
+  Extension,
+  applicationCommand,
+  listener,
+  option,
+} from '@pikokr/command.ts'
 import {
   ActionRowBuilder,
   ApplicationCommandOptionType,
@@ -18,12 +23,12 @@ import type {
   TextBasedChannel,
 } from 'discord.js'
 
-class Raid extends CustomExt {
+class Raid extends Extension<CustomClient> {
   @listener({
     event: 'channelCreate',
   })
   async applyMutedPermission(channel: NonThreadGuildBasedChannel) {
-    const data = await this.db.server.findUnique({
+    const data = await this.commandClient.db.server.findUnique({
       where: {
         id: channel.guild.id,
       },
@@ -45,7 +50,7 @@ class Raid extends CustomExt {
     event: 'guildMemberAdd',
   })
   async shield(member: GuildMember) {
-    const data = await this.db.server.findUnique({
+    const data = await this.commandClient.db.server.findUnique({
       where: {
         id: member.guild.id,
       },
@@ -184,7 +189,7 @@ class Raid extends CustomExt {
           components: [],
         })
 
-        await this.db.server.upsert({
+        await this.commandClient.db.server.upsert({
           where: {
             id: i.guildId!,
           },
@@ -224,7 +229,7 @@ class Raid extends CustomExt {
     )
       return i.editReply('You do not have permission to use this command.')
 
-    const data = await this.db.server.findUnique({
+    const data = await this.commandClient.db.server.findUnique({
       where: {
         id: i.guildId!,
       },
@@ -233,41 +238,33 @@ class Raid extends CustomExt {
     if (!data)
       return i.editReply('This server is not using the raid shield system.')
 
-    const res = await i.editReply({
-      content: 'Are you sure you want to disable the raid shield system?',
-      components: [new Confirm()],
+    const confirm = new Confirm(i, {
+      message: 'Are you sure you want to disable the raid shield system?',
+      confirm: 'Yes',
+      deny: 'No',
+      defer: true,
+      confirmFn: async ({ i }) => {
+        await i.guild!.roles.cache.get(data.role)!.delete()
+
+        await this.commandClient.db.server.delete({
+          where: {
+            id: i.guildId!,
+          },
+        })
+
+        i.editReply({
+          content: 'The raid shield system has been disabled.',
+          components: [],
+        })
+      },
+      denyFn: async ({ i }) =>
+        i.editReply({
+          content: 'The raid shield system has not been disabled.',
+          components: [],
+        }),
     })
 
-    res
-      .createMessageComponentCollector({
-        filter: (j) => j.user.id === i.user.id,
-        componentType: ComponentType.Button,
-      })
-      .on('collect', async (j) => {
-        if (j.customId === 'confirm') {
-          await j.deferUpdate()
-
-          await i.guild!.roles.cache.get(data.role)!.delete()
-
-          await i.editReply({
-            content: 'The raid shield system has been disabled.',
-            components: [],
-          })
-
-          await this.db.server.delete({
-            where: {
-              id: i.guildId!,
-            },
-          })
-        } else {
-          await j.deferUpdate()
-
-          await i.editReply({
-            content: 'The raid shield system has not been disabled.',
-            components: [],
-          })
-        }
-      })
+    confirm.send()
   }
 
   @applicationCommand({
@@ -283,7 +280,7 @@ class Raid extends CustomExt {
     if (!i.guild)
       return i.editReply('This command can only be used on servers.')
 
-    const data = await this.db.server.findUnique({
+    const data = await this.commandClient.db.server.findUnique({
       where: {
         id: i.guildId!,
       },
