@@ -58,7 +58,8 @@ export default class Confirm<Interaction extends EditReplyInteraction> {
             style: deny.style ?? ButtonStyle.Danger,
           }
 
-    const _message = typeof message === 'string' ? { content: message } : message
+    const _message =
+      typeof message === 'string' ? { content: message } : message
 
     const msg = await this.i.editReply({
       ..._message,
